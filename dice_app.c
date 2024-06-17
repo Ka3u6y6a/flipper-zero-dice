@@ -5,12 +5,12 @@
 
 const Icon* draw_dice_frame;
 
-static uint16_t unbiased_rand (uint16_t max) {
+static uint16_t unbiased_rand(uint16_t max) {
     uint16_t remainder = RAND_MAX % max;
     uint16_t x;
     do {
         x = rand();
-    } while (x >= RAND_MAX - remainder);
+    } while(x >= RAND_MAX - remainder);
     return 1 + x % max;
 }
 
@@ -137,31 +137,49 @@ static void draw_history(const State* state, Canvas* canvas) {
         // left side
         furi_string_printf(hist, "%01d.", i + 1);
         canvas_draw_str_aligned(canvas, x, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
-        if (state->history[i].index < 0) {
+        if(state->history[i].index < 0) {
             furi_string_printf(hist, "--------");
         } else {
-            if (state->history[i].index == 0){
+            if(state->history[i].index == 0) {
                 furi_string_printf(hist, state->history[i].result == 1 ? "Heads" : "Tails");
             } else {
-                furi_string_printf(hist, "%01d%s: %01d", state->history[i].count, dice_types[state->history[i].index].name, state->history[i].result);
+                furi_string_printf(
+                    hist,
+                    "%01d%s: %01d",
+                    state->history[i].count,
+                    dice_types[state->history[i].index].name,
+                    state->history[i].result);
             }
         }
-        canvas_draw_str_aligned(canvas, x + HISTORY_X_GAP, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
+        canvas_draw_str_aligned(
+            canvas, x + HISTORY_X_GAP, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
 
         // right side
         uint8_t r_index = i + HISTORY_COL;
         furi_string_printf(hist, "%01d.", r_index + 1);
-        canvas_draw_str_aligned(canvas, x + HISTORY_STEP_X, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
-        if (state->history[r_index].index < 0){
+        canvas_draw_str_aligned(
+            canvas, x + HISTORY_STEP_X, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
+        if(state->history[r_index].index < 0) {
             furi_string_printf(hist, "--------");
         } else {
-            if (state->history[r_index].index == 0){
+            if(state->history[r_index].index == 0) {
                 furi_string_printf(hist, state->history[r_index].result == 1 ? "Heads" : "Tails");
             } else {
-                furi_string_printf(hist, "%01d%s: %01d", state->history[r_index].count, dice_types[state->history[r_index].index].name, state->history[r_index].result);
+                furi_string_printf(
+                    hist,
+                    "%01d%s: %01d",
+                    state->history[r_index].count,
+                    dice_types[state->history[r_index].index].name,
+                    state->history[r_index].result);
             }
         }
-        canvas_draw_str_aligned(canvas, x + HISTORY_STEP_X + HISTORY_X_GAP, y, AlignLeft, AlignBottom, furi_string_get_cstr(hist));
+        canvas_draw_str_aligned(
+            canvas,
+            x + HISTORY_STEP_X + HISTORY_X_GAP,
+            y,
+            AlignLeft,
+            AlignBottom,
+            furi_string_get_cstr(hist));
 
         y += HISTORY_STEP_Y;
     }
@@ -249,13 +267,9 @@ static void draw_callback(Canvas* canvas, void* ctx) {
     const State* state = ctx;
     furi_mutex_acquire(state->mutex, FuriWaitForever);
 
-    if(state == NULL) {
-        return;
-    }
-
     canvas_clear(canvas);
 
-    if (state->app_state == HistoryState) {
+    if(state->app_state == HistoryState) {
         draw_history(state, canvas);
     } else {
         draw_main_menu(state, canvas);
@@ -270,14 +284,16 @@ static void draw_callback(Canvas* canvas, void* ctx) {
     furi_mutex_release(state->mutex);
 }
 
-static void input_callback(InputEvent* input_event, FuriMessageQueue* event_queue) {
+static void input_callback(InputEvent* input_event, void* context) {
+    FuriMessageQueue* event_queue = context;
     furi_assert(event_queue);
 
     AppEvent event = {.type = EventTypeKey, .input = *input_event};
     furi_message_queue_put(event_queue, &event, FuriWaitForever);
 }
 
-static void timer_callback(FuriMessageQueue* event_queue) {
+static void timer_callback(void* context) {
+    FuriMessageQueue* event_queue = context;
     furi_assert(event_queue);
 
     AppEvent event = {.type = EventTypeTick};
@@ -294,12 +310,6 @@ int32_t dice_dnd_app(void* p) {
 
     state->mutex = furi_mutex_alloc(FuriMutexTypeNormal);
 
-    if(!state->mutex) {
-        FURI_LOG_E(TAG, "cannot create mutex\r\n");
-        free(state);
-        return 255;
-    }
-
     // Set callbacks
     ViewPort* view_port = view_port_alloc();
     view_port_draw_callback_set(view_port, draw_callback, state);
@@ -314,7 +324,7 @@ int32_t dice_dnd_app(void* p) {
 
     AppEvent event;
     for(bool processing = true; processing;) {
-        FuriStatus event_status = furi_message_queue_get(event_queue, &event, 100);
+        FuriStatus event_status = furi_message_queue_get(event_queue, &event, FuriWaitForever);
         furi_mutex_acquire(state->mutex, FuriWaitForever);
 
         if(event_status == FuriStatusOk) {
@@ -323,7 +333,7 @@ int32_t dice_dnd_app(void* p) {
                 update(state);
             }
             // button events
-            if(event.type == EventTypeKey) {
+            else if(event.type == EventTypeKey) {
                 if(event.input.type == InputTypePress) {
                     // dice type
                     if(isDiceButtonsVisible(state->app_state)) {
@@ -363,18 +373,17 @@ int32_t dice_dnd_app(void* p) {
                         roll(state);
                     }
                 }
-                
                 // back button handlers
-                if(event.input.key == InputKeyBack){
+                else if(event.input.key == InputKeyBack) {
                     // switch states
                     if(event.input.type == InputTypeShort) {
-                        if(state->app_state == SelectState){
+                        if(state->app_state == SelectState) {
                             state->app_state = HistoryState;
-                        }
-                        else if(state->app_state == HistoryState) {
+                        } else if(state->app_state == HistoryState) {
                             state->app_state = SelectState;
-                        }
-                        else if(state->app_state == ResultState || state->app_state == AnimResultState) {
+                        } else if(
+                            state->app_state == ResultState ||
+                            state->app_state == AnimResultState) {
                             state->anim_frame = 0;
                             state->app_state = SelectState;
                         }
@@ -383,10 +392,8 @@ int32_t dice_dnd_app(void* p) {
                     else if(event.input.type == InputTypeLong) {
                         processing = false;
                     }
-                }                
+                }
             }
-        } else {
-            FURI_LOG_D(TAG, "osMessageQueue: event timeout");
         }
 
         view_port_update(view_port);
